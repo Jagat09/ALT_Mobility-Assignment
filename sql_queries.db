@@ -1,0 +1,464 @@
+-- Task 1: Order and Sales Analysis
+
+-- 1.1 Count orders by status
+SELECT 
+    order_status,
+    COUNT(*) as order_count,
+    ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM customer_orders), 2) as percentage
+FROM 
+    customer_orders
+GROUP BY 
+    order_status
+ORDER BY 
+    order_count DESC;
+
+-- 1.2 Sales amount by order status
+SELECT 
+    order_status,
+    ROUND(SUM(order_amount), 2) as total_sales,
+    ROUND(AVG(order_amount), 2) as average_order_value
+FROM 
+    customer_orders
+GROUP BY 
+    order_status
+ORDER BY 
+    total_sales DESC;
+
+-- 1.3 Monthly order and sales trends
+SELECT 
+    SUBSTR(order_date, 1, 7) as year_month,
+    COUNT(*) as order_count,
+    ROUND(SUM(order_amount), 2) as total_sales,
+    ROUND(AVG(order_amount), 2) as average_order_value
+FROM 
+    customer_orders
+GROUP BY 
+    year_month
+ORDER BY 
+    year_month;
+
+-- 1.4 Sales trend by quarter
+SELECT 
+    SUBSTR(order_date, 1, 4) as year,
+    CASE 
+        WHEN SUBSTR(order_date, 6, 2) IN ('01', '02', '03') THEN 'Q1'
+        WHEN SUBSTR(order_date, 6, 2) IN ('04', '05', '06') THEN 'Q2'
+        WHEN SUBSTR(order_date, 6, 2) IN ('07', '08', '09') THEN 'Q3'
+        ELSE 'Q4'
+    END as quarter,
+    COUNT(*) as order_count,
+    ROUND(SUM(order_amount), 2) as total_sales
+FROM 
+    customer_orders
+GROUP BY 
+    year, quarter
+ORDER BY 
+    year, quarter;
+
+-- Task 2: Customer Analysis
+
+-- 2.1 Count orders per customer
+SELECT 
+    customer_id,
+    COUNT(*) as order_count,
+    ROUND(SUM(order_amount), 2) as total_spent,
+    ROUND(AVG(order_amount), 2) as average_order_value,
+    MIN(order_date) as first_order_date,
+    MAX(order_date) as latest_order_date
+FROM 
+    customer_orders
+GROUP BY 
+    customer_id
+ORDER BY 
+    order_count DESC
+LIMIT 10;
+
+-- 2.2 Customer order frequency distribution
+SELECT 
+    order_count,
+    COUNT(*) as customer_count,
+    ROUND(COUNT(*) * 100.0 / (SELECT COUNT(DISTINCT customer_id) FROM customer_orders), 2) as percentage
+FROM (
+    SELECT 
+        customer_id, 
+        COUNT(*) as order_count
+    FROM 
+        customer_orders
+    GROUP BY 
+        customer_id
+) as customer_orders_count
+GROUP BY 
+    order_count
+ORDER BY 
+    order_count;
+
+-- 2.3 Customer segmentation by spending
+SELECT 
+    CASE 
+        WHEN total_spent >= 1000 THEN 'High Value'
+        WHEN total_spent >= 500 THEN 'Medium Value'
+        ELSE 'Low Value'
+    END as customer_segment,
+    COUNT(*) as customer_count,
+    ROUND(AVG(total_spent), 2) as average_total_spent,
+    ROUND(SUM(total_spent), 2) as segment_revenue,
+    ROUND(SUM(total_spent) * 100.0 / (SELECT SUM(order_amount) FROM customer_orders), 2) as percentage_of_total_revenue
+FROM (
+    SELECT 
+        customer_id, 
+        SUM(order_amount) as total_spent
+    FROM 
+        customer_orders
+    GROUP BY 
+        customer_id
+) as customer_spending
+GROUP BY 
+    customer_segment
+ORDER BY 
+    average_total_spent DESC;
+
+-- 2.4 Customer repeat purchase patterns
+WITH customer_orders_with_row_number AS (
+    SELECT 
+        customer_id,
+        order_id,
+        order_date,
+        order_amount,
+        ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date) as order_sequence
+    FROM 
+        customer_orders
+)
+SELECT 
+    order_sequence,
+    COUNT(*) as order_count,
+    ROUND(AVG(order_amount), 2) as average_order_value,
+    ROUND(SUM(order_amount), 2) as total_revenue
+FROM 
+    customer_orders_with_row_number
+WHERE 
+    order_sequence <= 5
+GROUP BY 
+    order_sequence
+ORDER BY 
+    order_sequence;
+
+-- Task 3: Payment Status Analysis
+
+-- 3.1 Payment status distribution
+SELECT 
+    payment_status,
+    COUNT(*) as payment_count,
+    ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM payments), 2) as percentage
+FROM 
+    payments
+GROUP BY 
+    payment_status
+ORDER BY 
+    payment_count DESC;
+
+-- 3.2 Payment method distribution
+SELECT 
+    payment_method,
+    COUNT(*) as payment_count,
+    ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM payments), 2) as percentage,
+    ROUND(SUM(payment_amount), 2) as total_amount
+FROM 
+    payments
+GROUP BY 
+    payment_method
+ORDER BY 
+    payment_count DESC;
+
+-- 3.3 Payment success rate by payment method
+SELECT 
+    payment_method,
+    COUNT(*) as total_payments,
+    SUM(CASE WHEN payment_status = 'completed' THEN 1 ELSE 0 END) as successful_payments,
+    ROUND(SUM(CASE WHEN payment_status = 'completed' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) as success_rate,
+    ROUND(AVG(payment_amount), 2) as average_payment_amount
+FROM 
+    payments
+GROUP BY 
+    payment_method
+ORDER BY 
+    success_rate DESC;
+
+-- 3.4 Payment status by month
+SELECT 
+    SUBSTR(payment_date, 1, 7) as year_month,
+    payment_status,
+    COUNT(*) as payment_count,
+    ROUND(SUM(payment_amount), 2) as total_amount
+FROM 
+    payments
+GROUP BY 
+    year_month, payment_status
+ORDER BY 
+    year_month, payment_status;
+
+-- 3.5 Average time between order and payment
+SELECT 
+    AVG(JULIANDAY(p.payment_date) - JULIANDAY(o.order_date)) as avg_days_to_payment
+FROM 
+    customer_orders o
+JOIN 
+    payments p ON o.order_id = p.order_id
+WHERE 
+    p.payment_status = 'completed';
+
+-- 3.6 Failed payment analysis
+SELECT 
+    payment_method,
+    COUNT(*) as failed_payment_count,
+    ROUND(COUNT(*) * 100.0 / (
+        SELECT COUNT(*) FROM payments WHERE payment_status = 'failed'
+    ), 2) as percentage_of_failed,
+    ROUND(AVG(payment_amount), 2) as average_failed_amount
+FROM 
+    payments
+WHERE 
+    payment_status = 'failed'
+GROUP BY 
+    payment_method
+ORDER BY 
+    failed_payment_count DESC;
+
+-- Task 4: Order Details Report
+
+-- 4.1 Comprehensive Order Details with Payment Status
+SELECT 
+    o.order_id,
+    o.customer_id,
+    o.order_date,
+    o.order_amount,
+    o.order_status,
+    COUNT(p.payment_id) as payment_count,
+    ROUND(SUM(CASE WHEN p.payment_status = 'completed' THEN p.payment_amount ELSE 0 END), 2) as paid_amount,
+    ROUND(o.order_amount - SUM(CASE WHEN p.payment_status = 'completed' THEN p.payment_amount ELSE 0 END), 2) as remaining_amount,
+    MAX(CASE WHEN p.payment_status = 'completed' THEN 'Yes' ELSE 'No' END) as fully_paid,
+    GROUP_CONCAT(DISTINCT p.payment_method) as payment_methods_used,
+    MAX(p.payment_date) as latest_payment_date
+FROM 
+    customer_orders o
+LEFT JOIN 
+    payments p ON o.order_id = p.order_id
+GROUP BY 
+    o.order_id, o.customer_id, o.order_date, o.order_amount, o.order_status
+ORDER BY 
+    o.order_date DESC
+LIMIT 100;
+
+-- 4.2 Order Fulfillment Timeline
+SELECT 
+    SUBSTR(order_date, 1, 7) as year_month,
+    order_status,
+    COUNT(*) as order_count,
+    ROUND(AVG(order_amount), 2) as average_order_value,
+    SUM(order_amount) as total_sales
+FROM 
+    customer_orders
+GROUP BY 
+    year_month, order_status
+ORDER BY 
+    year_month, order_status;
+
+-- 4.3 Order Payment Gap Analysis
+WITH order_payment_summary AS (
+    SELECT 
+        o.order_id,
+        o.order_date,
+        o.order_amount,
+        MAX(p.payment_date) as last_payment_date,
+        SUM(CASE WHEN p.payment_status = 'completed' THEN p.payment_amount ELSE 0 END) as total_paid_amount
+    FROM 
+        customer_orders o
+    LEFT JOIN 
+        payments p ON o.order_id = p.order_id
+    GROUP BY 
+        o.order_id, o.order_date, o.order_amount
+)
+SELECT 
+    CASE 
+        WHEN total_paid_amount >= order_amount THEN 'Fully Paid'
+        WHEN total_paid_amount > 0 THEN 'Partially Paid'
+        ELSE 'No Payment'
+    END as payment_status,
+    COUNT(*) as order_count,
+    ROUND(SUM(order_amount), 2) as total_order_value,
+    ROUND(SUM(total_paid_amount), 2) as total_paid,
+    ROUND(SUM(order_amount - total_paid_amount), 2) as total_unpaid
+FROM 
+    order_payment_summary
+GROUP BY 
+    payment_status;
+
+-- 4.4 Customer Order Profile 
+WITH customer_summary AS (
+    SELECT 
+        o.customer_id,
+        COUNT(DISTINCT o.order_id) as order_count,
+        ROUND(SUM(o.order_amount), 2) as total_spent,
+        ROUND(AVG(o.order_amount), 2) as average_order_value,
+        MIN(o.order_date) as first_order_date,
+        MAX(o.order_date) as most_recent_order_date,
+        COUNT(DISTINCT SUBSTR(o.order_date, 1, 7)) as active_months,
+        SUM(CASE WHEN p.payment_status = 'failed' THEN 1 ELSE 0 END) as failed_payments,
+        COUNT(DISTINCT p.payment_method) as payment_methods_used
+    FROM 
+        customer_orders o
+    LEFT JOIN 
+        payments p ON o.order_id = p.order_id
+    GROUP BY 
+        o.customer_id
+)
+SELECT 
+    customer_id,
+    order_count,
+    total_spent,
+    average_order_value,
+    first_order_date,
+    most_recent_order_date,
+    ROUND(JULIANDAY(most_recent_order_date) - JULIANDAY(first_order_date)) as customer_lifetime_days,
+    active_months,
+    ROUND(order_count * 1.0 / active_months, 2) as orders_per_active_month,
+    failed_payments,
+    ROUND(failed_payments * 100.0 / order_count, 2) as payment_failure_rate,
+    payment_methods_used
+FROM 
+    customer_summary
+ORDER BY 
+    total_spent DESC
+LIMIT 20;
+
+-- Task 5: Queries to support Customer Retention Analysis
+
+-- 5.1 Monthly Cohort Acquisition
+SELECT 
+    SUBSTR(first_order_date, 1, 7) as cohort_month,
+    COUNT(*) as new_customers
+FROM (
+    SELECT 
+        customer_id,
+        MIN(order_date) as first_order_date
+    FROM 
+        customer_orders
+    GROUP BY 
+        customer_id
+) as first_purchases
+GROUP BY 
+    cohort_month
+ORDER BY 
+    cohort_month;
+
+-- 5.2 Cohort Retention Matrix - First 12 months
+WITH first_purchases AS (
+    SELECT 
+        customer_id,
+        MIN(order_date) as first_order_date,
+        SUBSTR(MIN(order_date), 1, 7) as cohort_month
+    FROM 
+        customer_orders
+    GROUP BY 
+        customer_id
+),
+cohort_sizes AS (
+    SELECT 
+        cohort_month,
+        COUNT(*) as cohort_size
+    FROM 
+        first_purchases
+    GROUP BY 
+        cohort_month
+),
+customer_activity AS (
+    SELECT 
+        fp.customer_id,
+        fp.cohort_month,
+        SUBSTR(co.order_date, 1, 7) as activity_month,
+        (
+            (CAST(SUBSTR(co.order_date, 1, 4) as INTEGER) - CAST(SUBSTR(fp.first_order_date, 1, 4) as INTEGER)) * 12 +
+            (CAST(SUBSTR(co.order_date, 6, 2) as INTEGER) - CAST(SUBSTR(fp.first_order_date, 6, 2) as INTEGER))
+        ) as month_number
+    FROM 
+        first_purchases fp
+    JOIN 
+        customer_orders co ON fp.customer_id = co.customer_id
+    WHERE 
+        (
+            (CAST(SUBSTR(co.order_date, 1, 4) as INTEGER) - CAST(SUBSTR(fp.first_order_date, 1, 4) as INTEGER)) * 12 +
+            (CAST(SUBSTR(co.order_date, 6, 2) as INTEGER) - CAST(SUBSTR(fp.first_order_date, 6, 2) as INTEGER))
+        ) BETWEEN 0 AND 11
+),
+cohort_retention AS (
+    SELECT 
+        ca.cohort_month,
+        ca.month_number,
+        COUNT(DISTINCT ca.customer_id) as active_customers
+    FROM 
+        customer_activity ca
+    GROUP BY 
+        ca.cohort_month, ca.month_number
+)
+SELECT 
+    cr.cohort_month,
+    cs.cohort_size,
+    cr.month_number,
+    cr.active_customers,
+    ROUND(cr.active_customers * 100.0 / cs.cohort_size, 2) as retention_rate
+FROM 
+    cohort_retention cr
+JOIN 
+    cohort_sizes cs ON cr.cohort_month = cs.cohort_month
+ORDER BY 
+    cr.cohort_month, cr.month_number;
+
+-- 5.3 Retention by payment method
+WITH first_purchase_payment_method AS (
+    SELECT 
+        co.customer_id,
+        MIN(co.order_date) as first_order_date,
+        FIRST_VALUE(p.payment_method) OVER (
+            PARTITION BY co.customer_id 
+            ORDER BY co.order_date
+            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+        ) as first_payment_method
+    FROM 
+        customer_orders co
+    JOIN 
+        payments p ON co.order_id = p.order_id
+    GROUP BY 
+        co.customer_id
+),
+repeat_purchases AS (
+    SELECT 
+        fppm.customer_id,
+        fppm.first_payment_method,
+        COUNT(DISTINCT co.order_id) - 1 as repeat_purchase_count
+    FROM 
+        first_purchase_payment_method fppm
+    JOIN 
+        customer_orders co ON fppm.customer_id = co.customer_id
+    WHERE 
+        co.order_date > fppm.first_order_date
+    GROUP BY 
+        fppm.customer_id, fppm.first_payment_method
+)
+SELECT 
+    first_payment_method,
+    COUNT(DISTINCT customer_id) as total_customers,
+    SUM(CASE WHEN repeat_purchase_count > 0 THEN 1 ELSE 0 END) as returning_customers,
+    ROUND(SUM(CASE WHEN repeat_purchase_count > 0 THEN 1 ELSE 0 END) * 100.0 / COUNT(DISTINCT customer_id), 2) as retention_rate,
+    AVG(repeat_purchase_count) as avg_repeat_purchases
+FROM (
+    SELECT 
+        fppm.customer_id,
+        fppm.first_payment_method,
+        COALESCE(rp.repeat_purchase_count, 0) as repeat_purchase_count
+    FROM 
+        first_purchase_payment_method fppm
+    LEFT JOIN 
+        repeat_purchases rp ON fppm.customer_id = rp.customer_id
+) as customer_retention
+GROUP BY 
+    first_payment_method;
+---------------------------------------------------------
