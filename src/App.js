@@ -1,23 +1,17 @@
-import logo from './logo.svg';
-import './App.css';
+import React from 'react';
+import CustomerAnalysis from './CustomerAnalysis';
+import OrderSalesAnalysis from './OrderSalesAnalysis';
+import CustomerRetentionAnalysis from './CustomerRetentionAnalysis';
+import PaymentStatusAnalysis from './PaymentStatusAnalysis';
 
 function App() {
   return (
     <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+      <h1 style={{ textAlign: 'center', margin: '20px' }}>Alt Mobility Dashboard</h1>
+      <CustomerAnalysis />
+      <OrderSalesAnalysis />
+      <CustomerRetentionAnalysis />
+      <PaymentStatusAnalysis />
     </div>
   );
 }
